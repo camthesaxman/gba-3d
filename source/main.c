@@ -371,6 +371,8 @@ static const s16 gSineTable[] =
     Q_8_8(0.99609375),  // sin(319*(π/128))
 };
 
+u32 inverseTable[512];
+
 fixed_t float_to_fixed(float n)
 {
     return round(n * (1 << 16));
@@ -421,6 +423,8 @@ void swap_buffers(void)
 
 void initialize(void)
 {
+    int i;
+
     // the vblank interrupt must be enabled for VBlankIntrWait() to work
     // since the default dispatcher handles the bios flags no vblank handler
     // is required
@@ -432,6 +436,10 @@ void initialize(void)
 
     // Load palette
     memcpy((void *)BG_PALETTE, colormapPal, 256 * sizeof(u16));
+
+    // Compute fixed point inverses
+    for (i = 0; i < 512; i++)
+        inverseTable[i] = (1 << 16) / (u32)i;
 }
 
 void read_input(void)
@@ -523,11 +531,16 @@ void render_c(void)
         lx += (camera.x);
         ly += (camera.y);
 
-        fixed_t invz = 65536 / z;
+        //fixed_t invz = 65536 / z;
+        fixed_t invz = inverseTable[z];
 
         for (i = 0; i < SCREEN_WIDTH/2; i++, ly += dy, lx += dx)
         {
             u32 index = ((ly >> 16) & 1023) * 1024 + ((lx >> 16) & 1023);
+            /*
+            u32 index2 = ((ly >> 15) & (1023<<1)) * 1024 + ((lx >> 15) & (1023<<1));
+            assert(index2 == index * 2);
+            */
             //if ((u32)ly >= 2*1024 << 16 || (u32)lx >= 2*1024 << 16) continue; // bounds
             s32 height = ((128 * (camera.height - terrain_bin[index * 2 + 1]) * invz) >> 16) + camera.horizon;
             if (height < 0)

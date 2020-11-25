@@ -32,8 +32,8 @@ render_asm:
 
     @@@ Fill screen with BG color @@@
 
-    ldr r0, =frameBuffer
-    ldr r1, [r0]                @ r1 = dest address (frameBuffer)
+    ldr r12, =frameBuffer
+    ldr r1, [r12]                @ r1 = dest address (frameBuffer)
     adr r0, bgColorFillValue    @ r0 = src address
     ldr r2, =(CPUSET_SRC_FIXED | (SCREEN_WIDTH * SCREEN_HEIGHT / 4))   @ r2 = control and size
     swi (SWI_CPUFASTSET << 16)
@@ -45,9 +45,7 @@ render_asm:
     ldr r2, =(CPUSET_SRC_FIXED | CPUSET_32BIT | (SCREEN_WIDTH/2/4))   @ r2 = control and size
     swi (SWI_CPUSET << 16)
 
-    @ r0 = frameBuffer
-    ldr r0, =frameBuffer
-    ldr r0, [r0]
+    ldr r0, [r12]   @ r0 = frameBuffer
 
     @@@ Draw image
 
@@ -82,11 +80,8 @@ render_asm:
     add r5, r5, r3      @ ly += camera.y
 
     @ compute 1 / z in fixed point
-    push {r0, r1}
-    mov r0, #(1 << 16)
-    swi (SWI_DIV<<16)      @ call Div (divides r0 by r1, result in r0)
-    mov r9, r0          @ r9 = 1 / z
-    pop {r0, r1}
+    ldr r9, =inverseTable
+    ldr r9, [r9, r1, lsl #2]    @ r9 = (1 << 16) / z
 
     @ Draw columns
 
@@ -94,12 +89,11 @@ render_asm:
   .LnextColumn:
 
     @ compute map index (r3)
-    mov r11, #1024
-    sub r11, #1
-    and r3, r11, r5, asr 16     @ r3 = (ly >> 16) & 1023
-    and r4, r11, r7, asr 16     @ r4 = (lx >> 16) & 1023
+    mov r11, #2048
+    sub r11, #2
+    and r3, r11, r5, asr 15
+    and r4, r11, r7, asr 15
     add r3, r4, r3, lsl 10      @ r3 = index
-    lsl r3, r3, 1
 
     @ compute height (r4)
     ldr r4, [r2, o_camera_height]
