@@ -438,7 +438,7 @@ void initialize(void)
     memcpy((void *)BG_PALETTE, colormapPal, 256 * sizeof(u16));
 
     // Compute fixed point inverses
-    for (i = 0; i < 512; i++)
+    for (i = 1; i < 512; i++)
         inverseTable[i] = (1 << 16) / (u32)i;
 }
 
