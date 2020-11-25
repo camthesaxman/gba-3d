@@ -114,11 +114,13 @@ render_asm:
 
     @ r12 is now free
 
-    ldrb r11, [sp, r10]         @ r11 = ybuffer[i]
-    cmp r4, r11
-    bge .LskipBar               @ only draw if height < ybuffer[i]
+    ldrb r11, [sp, r10]
+    subs r11, r11, r4           @ r11 = ybuffer[i] - height
+    ble .LskipBar               @ only draw if ybuffer[i] > height
 
     @@@ Draw vertical bar from coordinate (i, height) to (i, ybuffer[i]) @@@
+
+    strb r4, [sp, r10]          @ update ybuffer[i]
 
     @ get color (r3)
     and r3, r3, #0xFF
@@ -130,16 +132,13 @@ render_asm:
     add r12, r0, r12, lsl #1       @ r12 = dest
 
     @ compute maxdest (r11)
-    rsb r11, r11, r11, lsl #4
-    add r11, r10, r11, lsl #3      @ ybuffer[i] * (SCREEN_WIDTH/2) + i
-    add r11, r0, r11, lsl #1       @ r11 = maxdest
+    rsb r4, r11, r11, lsl #4
+    add r11, r12, r4, lsl #4        @ r11 = dest + (ybuffer[i] - height) * SCREEN_WIDTH
 
   .LwriteBarPixel:
     strh r3, [r12], #SCREEN_WIDTH
     cmp r12, r11
     blt .LwriteBarPixel
-
-    strb r4, [sp, r10]          @ update ybuffer[i]
 
   .LskipBar:
 
