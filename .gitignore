@@ -1,0 +1,6 @@
+*.sw*
+*.gba
+*.elf
+*.sav
+*.exe
+build/
