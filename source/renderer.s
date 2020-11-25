@@ -125,14 +125,10 @@ render_asm:
     add r12, r10, r12, lsl #3      @ height * (SCREEN_WIDTH/2) + i
     add r12, r0, r12, lsl #1       @ r12 = dest
 
-    @ compute maxdest (r11)
-    rsb r4, r11, r11, lsl #4
-    add r11, r12, r4, lsl #4        @ r11 = dest + (ybuffer[i] - height) * SCREEN_WIDTH
-
   .LwriteBarPixel:
-    strh r3, [r12], #SCREEN_WIDTH
-    cmp r12, r11
-    blt .LwriteBarPixel
+    strh r3, [r12], #SCREEN_WIDTH   
+    subs r11, #1
+    bgt .LwriteBarPixel
 
   .LskipBar:
 
