@@ -83,6 +83,11 @@ render_asm:
     ldr r9, =inverseTable
     ldr r9, [r9, r1, lsl #2]    @ r9 = (1 << 16) / z
 
+    str r1, [sp, #-4]            @ store z onto the stack since it's not needed in the inner loop
+
+    ldr r14, [r2, #o_camera_height]
+    ldr r1, [r2, #o_camera_horizon]
+
     @ Draw columns
 
     mov r10, #0         @ r10 = i
@@ -96,13 +101,11 @@ render_asm:
     add r3, r4, r3, lsl 10      @ r3 = index
 
     @ compute height (r4)
-    ldr r4, [r2, o_camera_height]
     ldr r12, =terrain_bin
     ldrh r3, [r12, r3]          @ read terrain (heightmap value in upper byte, colormap value in lower byte)
-    sub r4, r4, r3, lsr #8
+    sub r4, r14, r3, lsr #8
     mul r12, r4, r9             @ r12 = (camera.height - heightmapBitmap[index]) * invz
-    ldr r11, [r2, o_camera_horizon]
-    adds r4, r11, r12, asr #9   @ r4 = ((128 * (camera.height - heightmapBitmap[index]) * invz) >> 16) + camera.horizon;
+    adds r4, r1, r12, asr #9   @ r4 = ((128 * (camera.height - heightmapBitmap[index]) * invz) >> 16) + camera.horizon;
 
     movlt r4, #0                @ if (height < 0) height = 0
 
@@ -139,17 +142,12 @@ render_asm:
     blt .LnextColumn
 
     @ update z
+    ldr r1, [sp, #-4]
     cmp r1, #256
     addhs r1, r1, #4
     cmp r1, #128
     addhs r1, r1, #2
     add r1, r1, #2
-
-    @mov r12, #0
-    @movs r12, r1, lsr #8
-    @movne r12, #4
-    @adceq r12, #1
-    @add r1, r1, r12, lsl #1
 
     cmp r1, #512
     blt .LnextZ
