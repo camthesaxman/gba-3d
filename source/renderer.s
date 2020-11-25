@@ -8,12 +8,12 @@
     .set SCREEN_WIDTH,  240
     .set SCREEN_HEIGHT, 160
 
-    .set SWI_DIV,         0x06
-    .set SWI_CPUCOPY,     0x0B
-    .set SWI_CPUFASTCOPY, 0x0C
+    .set SWI_DIV,        0x06
+    .set SWI_CPUSET,     0x0B
+    .set SWI_CPUFASTSET, 0x0C
 
-    .set CPUCOPY_32BIT, (1 << 26)
-    .set CPUCOPY_SRC_FIXED, (1 << 24)
+    .set CPUSET_32BIT,     (1 << 26)
+    .set CPUSET_SRC_FIXED, (1 << 24)
 
 @ TODO: find a way to make sure these offsets are correct
     .set o_camera_x,      0x00
@@ -35,15 +35,15 @@ render_asm:
     ldr r0, =frameBuffer
     ldr r1, [r0]                @ r1 = dest address (frameBuffer)
     adr r0, bgColorFillValue    @ r0 = src address
-    ldr r2, =(CPUCOPY_SRC_FIXED | (SCREEN_WIDTH * SCREEN_HEIGHT / 4))   @ r2 = control and size
-    swi (SWI_CPUFASTCOPY << 16)
+    ldr r2, =(CPUSET_SRC_FIXED | (SCREEN_WIDTH * SCREEN_HEIGHT / 4))   @ r2 = control and size
+    swi (SWI_CPUFASTSET << 16)
 
     @@@ Initialize y buffer @@@
 
     mov r1, sp                  @ r1 = dest address (ybuffer)
     adr r0, yBufferFillValue    @ r0 = src address
-    ldr r2, =(CPUCOPY_SRC_FIXED | CPUCOPY_32BIT | (SCREEN_WIDTH/2/4))   @ r2 = control and size
-    swi (SWI_CPUCOPY << 16)
+    ldr r2, =(CPUSET_SRC_FIXED | CPUSET_32BIT | (SCREEN_WIDTH/2/4))   @ r2 = control and size
+    swi (SWI_CPUSET << 16)
 
     @ r0 = frameBuffer
     ldr r0, =frameBuffer
