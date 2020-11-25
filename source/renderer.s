@@ -99,48 +99,47 @@ render_asm:
     and r3, r11, r5, asr 16     @ r3 = (ly >> 16) & 1023
     and r4, r11, r7, asr 16     @ r4 = (lx >> 16) & 1023
     add r3, r4, r3, lsl 10      @ r3 = index
+    lsl r3, r3, 1
 
     @ compute height (r4)
     ldr r4, [r2, o_camera_height]
-    ldr r12, =heightmapBitmap
-    ldrb r12, [r12, r3]
-    sub r4, r4, r12
+    ldr r12, =terrain_bin
+    ldrh r3, [r12, r3]          @ read terrain (heightmap value in upper byte, colormap value in lower byte)
+    sub r4, r4, r3, lsr #8
     mul r12, r4, r9             @ r12 = (camera.height - heightmapBitmap[index]) * invz
     ldr r11, [r2, o_camera_horizon]
     adds r4, r11, r12, asr #9   @ r4 = ((128 * (camera.height - heightmapBitmap[index]) * invz) >> 16) + camera.horizon;
- 
+
     movlt r4, #0                @ if (height < 0) height = 0
+
+    @ r12 is now free
 
     ldrb r11, [sp, r10]         @ r11 = ybuffer[i]
     cmp r4, r11
-    bge .LskipBar
+    bge .LskipBar               @ only draw if height < ybuffer[i]
 
-    strb r4, [sp, r10]          @ update ybuffer[i]
+    @@@ Draw vertical bar from coordinate (i, height) to (i, ybuffer[i]) @@@
 
-    @@@ Draw vertical bar @@@
+    @ get color (r3)
+    and r3, r3, #0xFF
+    orr r3, r3, r3, lsl #8      @ r3 = color | (color << 8)
 
-    @ get color
-    ldr r12, =colormapBitmap
-    ldrb r12, [r12, r3]          @ r12 = color
-    orr r12, r12, r12, lsl 8    @ r12 = color | (color << 8)
-
-    @ r3 is now free
-
-    @ compute dest (r3)
-    rsb r3, r4, r4, lsl #4
-    add r3, r10, r3, lsl #3      @ height * (SCREEN_WIDTH/2) + i
-    add r3, r0, r3, lsl #1       @ r3 = dest
+    @ compute dest (r12)
+    rsb r12, r4, r4, lsl #4
+    add r12, r10, r12, lsl #3      @ height * (SCREEN_WIDTH/2) + i
+    add r12, r0, r12, lsl #1       @ r12 = dest
 
     @ compute maxdest (r11)
     rsb r11, r11, r11, lsl #4
     add r11, r10, r11, lsl #3      @ ybuffer[i] * (SCREEN_WIDTH/2) + i
     add r11, r0, r11, lsl #1       @ r11 = maxdest
 
-  .LbarPixel:
-    strh r12, [r3]
-    add r3, r3, #SCREEN_WIDTH
-    cmp r3, r11
-    blt .LbarPixel
+  .LwriteBarPixel:
+    strh r3, [r12], #SCREEN_WIDTH
+    cmp r12, r11
+    blt .LwriteBarPixel
+
+    strb r4, [sp, r10]          @ update ybuffer[i]
 
   .LskipBar:
 

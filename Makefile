@@ -8,6 +8,7 @@ endif
 
 include $(DEVKITARM)/gba_rules
 GRIT := grit
+PYTHON := python
 
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -85,6 +86,8 @@ ifneq ($(strip $(MUSIC)),)
 	BINFILES += soundbank.bin
 endif
 
+BINFILES += terrain.bin
+
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
 #---------------------------------------------------------------------------------
@@ -161,6 +164,8 @@ soundbank.bin soundbank.h : $(AUDIOFILES)
 	@echo $(notdir $<)
 	@$(bin2o)
 
+terrain.bin: colormap.png heightmap.png
+	$(PYTHON) ../tools/generate_terrain_map.py $^ $@
 
 %.s %.h : %.png
 	$(GRIT) $< -gu8 -gb -gB8 -fts

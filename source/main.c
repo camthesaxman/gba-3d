@@ -15,7 +15,8 @@
 #include "macro.h"
 
 #include "colormap.h"
-#include "heightmap.h"
+
+#include "terrain_bin.h"
 
 // represents a signed Q16.16 fixed point number
 typedef s32 fixed_t;
@@ -528,13 +529,12 @@ void render_c(void)
         {
             u32 index = ((ly >> 16) & 1023) * 1024 + ((lx >> 16) & 1023);
             //if ((u32)ly >= 2*1024 << 16 || (u32)lx >= 2*1024 << 16) continue; // bounds
-            s32 height = ((128 * (camera.height - heightmapBitmap[index]) * invz) >> 16) + camera.horizon;
+            s32 height = ((128 * (camera.height - terrain_bin[index * 2 + 1]) * invz) >> 16) + camera.horizon;
             if (height < 0)
                 height = 0;
             if (height < ybuffer[i])
             {
-                //frameBuffer[i/2] = 1;
-                u8 color = colormapBitmap[index];
+                u8 color = terrain_bin[index * 2];
                 draw_vertical_bar(i, height, ybuffer[i], color);
                 ybuffer[i] = height;
             }
