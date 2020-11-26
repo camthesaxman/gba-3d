@@ -738,7 +738,7 @@ int main(void)
         read_input();
         update();
         start_timer();
-        //render_c();
+        //render_c();  // 609191 cycles
         render_asm();
         renderTime = stop_timer();
         frames++;

@@ -134,10 +134,30 @@ render_asm:
     add r12, r10, r12, lsl #3      @ height * (SCREEN_WIDTH/2) + i
     add r12, r0, r12, lsl #1       @ r12 = dest
 
+.if 0
+
   .LwriteBarPixel:
-    strh r3, [r12], #SCREEN_WIDTH   
+    strh r3, [r12], #SCREEN_WIDTH
     subs r11, #1
     bgt .LwriteBarPixel
+
+.else
+
+    @ Simple "Duff's Device" to optimize this innermost loop
+    .set ITERATIONS_PER_LOOP, 16    @ must be a power of two
+    and r4, r11, #(ITERATIONS_PER_LOOP - 1)
+    rsb r4, r4, #ITERATIONS_PER_LOOP
+    add pc, pc, r4, lsl #2
+    nop
+  .LwriteBarPixel:
+    @ repeat the strh instruction ITERATIONS_PER_LOOP times
+    .rept ITERATIONS_PER_LOOP
+        strh r3, [r12], #SCREEN_WIDTH
+    .endr
+    subs r11, #ITERATIONS_PER_LOOP
+    bge .LwriteBarPixel
+
+.endif
 
   .LskipBar:
 
