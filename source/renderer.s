@@ -89,17 +89,21 @@ render_asm:
 
     ldr r14, [r2, #o_camera_height]
     ldr r1, [r2, #o_camera_horizon]
+    
+    @ r2 is now free
 
     @ Draw columns
 
     mov r10, #0         @ r10 = i
+
+    mov r2, #2048
+    sub r2, #2          @ r2 = (1024 << 1)
+
   .LnextColumn:
 
     @ compute map index (r3)
-    mov r11, #2048
-    sub r11, #2
-    and r3, r11, r5, asr 15
-    and r4, r11, r7, asr 15
+    and r3, r2, r5, asr 15
+    and r4, r2, r7, asr 15
     add r3, r4, r3, lsl 10      @ r3 = index
 
     @ compute height (r4)

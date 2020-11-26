@@ -515,7 +515,7 @@ void swap_buffers(void)
 static volatile int frames = 0;
 static volatile int fps = 0;
 static volatile int vblankCount = 0;
-static volatile int renderTime = 0;
+static volatile u32 renderTime = 0;
 
 static void vblank_handler(void)
 {
@@ -527,7 +527,7 @@ static void vblank_handler(void)
     }
     sprintf(hudText, "pos: %i,%i,%i\n"
                      "FPS: %i\n"
-                     "Render time: %i cycles",
+                     "Render time: %lu cycles",
                      (int)(camera.x >> 16), (int)(camera.y >> 16), (int)camera.height,
                      fps,
                      renderTime);
@@ -626,12 +626,16 @@ __attribute__((section(".iwram"), target("arm"), long_call))
 void render_c(void)
 {
     int i;
-    u8 ybuffer[SCREEN_WIDTH/2];
+    /*__attribute__((aligned(4))*/ u8 ybuffer[SCREEN_WIDTH/2] ALIGN(4);
 
+    /*
     DmaFill32(3, BG_COLOR|(BG_COLOR<<8)|(BG_COLOR<<16)|(BG_COLOR<<24), frameBuffer, 160 * 240);
 
     for (i = 0; i < SCREEN_WIDTH/2; i++)
         ybuffer[i] = 160;
+    */
+    CpuFastFill(BG_COLOR|(BG_COLOR<<8)|(BG_COLOR<<16)|(BG_COLOR<<24), frameBuffer, 160 * 240);
+    CpuFill32(160|(160<<8)|(160<<16)|(160<<24), ybuffer, sizeof(ybuffer));
 
     fixed_t s = camera.sinYaw;
     fixed_t c = camera.cosYaw;
@@ -689,6 +693,29 @@ void render_c(void)
 
 extern __attribute__((section(".iwram"), target("arm"), long_call)) void render_asm(void);
 
+static void start_timer(void)
+{
+    #define TM_ENABLE (1 << 7)
+    #define TM_CASCADE (1 << 2)
+    
+    // Disable timers and make them count from zero
+    REG_TM3CNT = 0;
+    REG_TM2CNT = 0;
+
+    // start timers
+    REG_TM3CNT_H = TM_ENABLE | TM_CASCADE;
+    REG_TM2CNT_H = TM_ENABLE;
+}
+
+static u32 stop_timer(void)
+{
+    u32 time = (REG_TM3CNT_L << 16) | REG_TM2CNT_L;
+
+    REG_TM3CNT = 0;
+    REG_TM2CNT = 0;
+    return time;
+}
+
 //---------------------------------------------------------------------------------
 // Program entry point
 //---------------------------------------------------------------------------------
@@ -710,18 +737,14 @@ int main(void)
     while (1) {
         read_input();
         update();
+        start_timer();
         //render_c();
-        REG_TM0CNT_L = 0;  // count from 0
-        REG_TM0CNT_H = (1 << 7);  // enable timer
         render_asm();
-        renderTime = REG_TM0CNT_L;  // read time
-        REG_TM0CNT_H = 0;  // disable timer
-        
-        renderTime = REG_TM0CNT_L;
+        renderTime = stop_timer();
         frames++;
         sprintf(hudText,
             "position: %i, %i, %i\n"
-            "render time: %i cycles\n",
+            "render time: %lu cycles\n",
             (int)(camera.x >> 16), (int)(camera.y >> 16), (int)camera.height,
             renderTime);
         //VBlankIntrWait();
