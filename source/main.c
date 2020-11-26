@@ -4,6 +4,8 @@
 #include <gba_console.h>
 #include <gba_interrupt.h>
 #include <gba_systemcalls.h>
+#include <gba_sprites.h>
+#include <gba_timers.h>
 #include <gba_video.h>
 #include <gba_input.h>
 #include <stdio.h>
@@ -17,6 +19,27 @@
 #include "colormap.h"
 
 #include "terrain_bin.h"
+
+#include "r6502_portfont_bin.h"
+
+struct OamData
+{
+    /*0x00*/ u32 y:8;
+    /*0x01*/ u32 affineMode:2;  // 0x1, 0x2 = 0x3
+             u32 objMode:2;     // 0x4, 0x8 = 0xC
+             u32 mosaic:1;      // 0x10
+             u32 bpp:1;         // 0x20
+             u32 shape:2;       // 0x40, 0x80
+
+    /*0x02*/ u32 x:9;
+             u32 matrixNum:5; // bits 3/4 are h-flip/v-flip if not in affine mode
+             u32 size:2;
+
+    /*0x04*/ u16 tileNum:10;
+             u16 priority:2;
+             u16 paletteNum:4;
+    /*0x06*/ u16 affineParam;
+};
 
 // represents a signed Q16.16 fixed point number
 typedef s32 fixed_t;
@@ -406,6 +429,74 @@ fixed_t fixed_cos(int angle)
     return fixed_sin(angle + (65536 / 4));
 }
 
+// HUD
+
+static char hudText[128];
+
+// must be called during v-blank
+static void hud_initialize(void)
+{
+    unsigned int i;
+
+    // set OAM data
+    for (i = 0; i < sizeof(hudText); i++)
+    {
+        volatile struct OamData *sprite = (struct OamData *)&OAM[i];
+        sprite->x = i * 8;
+        sprite->y = 0;
+        sprite->affineMode = 2;  // disable
+        sprite->tileNum = 0x200;
+    }
+
+    // Load font into sprite tile memory
+    DmaCopy32(3, r6502_portfont_bin, (void *)(VRAM + 0x14000), r6502_portfont_bin_size);
+
+    // Load sprite palette
+    u16 *spritePalette = SPRITE_PALETTE;
+    spritePalette[0] = RGB5(31, 31, 31);  // transparent
+    spritePalette[1] = RGB5(31, 16, 0);   // main color 1
+    spritePalette[2] = RGB5(31, 20, 0);   // main color 2
+    spritePalette[3] = RGB5(31, 24, 0);   // main color 3
+    spritePalette[4] = RGB5(31, 28, 0);   // main color 4
+    spritePalette[5] = RGB5(31, 31, 0);   // main color 5
+    spritePalette[6] = RGB5(0, 0, 0);     // shadow
+}
+
+// must be called during v-blank
+static void hud_update(void)
+{
+    unsigned int i;
+    int x = 0;
+    int y = 0;
+
+    for (i = 0; i < sizeof(hudText); i++)
+    {
+        int c = hudText[i];
+        volatile struct OamData *sprite = (struct OamData *)&OAM[i];
+
+        if (c == 0)
+            break;
+        if (c == '\n')
+        {
+            sprite->affineMode = 2;  // disable
+            x = 0;
+            y += 8;
+            continue;
+        }
+        sprite->affineMode = 0;  // enable
+        sprite->x = x;
+        sprite->y = y;
+        sprite->tileNum = 0x200 + c - 0x20;
+        x += 8;
+    }
+    // blank tiles
+    for (; i < sizeof(hudText); i++)
+    {
+        volatile struct OamData *sprite = (struct OamData *)&OAM[i];
+        sprite->affineMode = 2;  // disable
+    }
+}
+
 void swap_buffers(void)
 {
     fbNum ^= 1;
@@ -421,6 +512,34 @@ void swap_buffers(void)
     }
 }
 
+static volatile int frames = 0;
+static volatile int fps = 0;
+static volatile int vblankCount = 0;
+static volatile int renderTime = 0;
+
+static void vblank_handler(void)
+{
+    if (++vblankCount == 60)
+    {
+        vblankCount = 0;
+        fps = frames;
+        frames = 0;
+    }
+    sprintf(hudText, "pos: %i,%i,%i\n"
+                     "FPS: %i\n"
+                     "Render time: %i cycles",
+                     (int)(camera.x >> 16), (int)(camera.y >> 16), (int)camera.height,
+                     fps,
+                     renderTime);
+    hud_update();
+}
+
+void vblank_busy_wait(void)
+{
+    while (!(REG_DISPSTAT & 1))
+        ;
+}
+
 void initialize(void)
 {
     int i;
@@ -429,17 +548,24 @@ void initialize(void)
     // since the default dispatcher handles the bios flags no vblank handler
     // is required
     irqInit();
-    irqEnable(IRQ_VBLANK);
+    // interrupts interfere with profiling, so disable them
+    //irqSet(IRQ_VBLANK, vblank_handler);
+    //irqEnable(IRQ_VBLANK);
 
     // Set registers
-    REG_DISPCNT = DISPCNT_MODE_4 | DISPCNT_BG2_ON;
+    REG_DISPCNT = DISPCNT_MODE_4 | DISPCNT_BG2_ON | DISPCNT_OBJ_ON;
 
     // Load palette
     memcpy((void *)BG_PALETTE, colormapPal, 256 * sizeof(u16));
 
+
     // Compute fixed point inverses
     for (i = 1; i < 512; i++)
         inverseTable[i] = (1 << 16) / (u32)i;
+    
+    //VBlankIntrWait();
+    vblank_busy_wait();
+    hud_initialize();
 }
 
 void read_input(void)
@@ -585,8 +711,22 @@ int main(void)
         read_input();
         update();
         //render_c();
+        REG_TM0CNT_L = 0;  // count from 0
+        REG_TM0CNT_H = (1 << 7);  // enable timer
         render_asm();
-        VBlankIntrWait();
+        renderTime = REG_TM0CNT_L;  // read time
+        REG_TM0CNT_H = 0;  // disable timer
+        
+        renderTime = REG_TM0CNT_L;
+        frames++;
+        sprintf(hudText,
+            "position: %i, %i, %i\n"
+            "render time: %i cycles\n",
+            (int)(camera.x >> 16), (int)(camera.y >> 16), (int)camera.height,
+            renderTime);
+        //VBlankIntrWait();
+        vblank_busy_wait();
+        hud_update();
         swap_buffers();
     }
 }

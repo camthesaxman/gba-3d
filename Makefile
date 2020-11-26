@@ -26,7 +26,7 @@ TARGET		:= gba-3d
 BUILD		:= build
 SOURCES		:= source
 INCLUDES	:= include
-DATA		:=
+DATA		:= font
 MUSIC		:=
 GRAPHICS    := graphics
 

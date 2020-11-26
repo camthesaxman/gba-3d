@@ -27,8 +27,10 @@
     .global render_asm
 render_asm:
     push {r4-r12,lr}
-    sub sp, sp, #(SCREEN_WIDTH/2)
+    sub sp, sp, #(SCREEN_WIDTH/2+4)
     @ sp = ybuffer
+    @ z will be stored above this on the stack
+    .set local_saved_z, (SCREEN_WIDTH/2)
 
     @@@ Fill screen with BG color @@@
 
@@ -83,7 +85,7 @@ render_asm:
     ldr r9, =inverseTable
     ldr r9, [r9, r1, lsl #2]    @ r9 = (1 << 16) / z
 
-    str r1, [sp, #-4]            @ store z onto the stack since it's not needed in the inner loop
+    str r1, [sp, #local_saved_z]            @ store z onto the stack since it's not needed in the inner loop
 
     ldr r14, [r2, #o_camera_height]
     ldr r1, [r2, #o_camera_horizon]
@@ -142,7 +144,7 @@ render_asm:
     blt .LnextColumn
 
     @ update z
-    ldr r1, [sp, #-4]
+    ldr r1, [sp, #local_saved_z]
     cmp r1, #256
     addhs r1, r1, #4
     cmp r1, #128
@@ -154,7 +156,7 @@ render_asm:
 
   .Lreturn:
     @ return
-    add sp, sp, #(SCREEN_WIDTH/2)
+    add sp, sp, #(SCREEN_WIDTH/2+4)
     pop {r4-r12,lr}
     bx lr
 
